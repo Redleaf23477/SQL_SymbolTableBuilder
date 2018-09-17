@@ -3,15 +3,11 @@
 require("phpParser.php");
 
 $testSQL = array(
-// [Not Yet] JOIN
-"SELECT Orders.OrderID, Customers.CustomerName, Orders.OrderDate FROM Orders INNER JOIN Customers ON Orders.CustomerID=Customers.CustomerID;",
 
-// [Not Yet] JOIN
-"SELECT Orders.OrderID, Customers.CustomerName FROM Orders INNER JOIN Customers ON Orders.CustomerID = Customers.CustomerID and Orders.CustomerID = Customers.CustomerName;"
+// simple select
+ "Select A, B, C from myTable where D = 7122 and E = 9487 and F=G;"
 
 /*
-// simple select
- "Select A, B, C from myTable where D = 7122 and E = 9487 and F=G;",
 // select distinct
  "SELECT DISTINCT Country FROM Customers;",
 // select with star
@@ -22,6 +18,12 @@ $testSQL = array(
  "SELECT * FROM Customers WHERE Country='Mexico' or City is 'City';",
 // dealing with function
  "Select Avg(C) from mytable;",
+
+// [Not Yet] JOIN
+"SELECT Orders.OrderID, Customers.CustomerName, Orders.OrderDate FROM Orders INNER JOIN Customers ON Orders.CustomerID=Customers.CustomerID;",
+
+// [Not Yet] JOIN
+"SELECT Orders.OrderID, Customers.CustomerName FROM Orders INNER JOIN Customers ON Orders.CustomerID = Customers.CustomerID and Orders.CustomerID = Customers.CustomerName;"
 
 // [FAILED] Mulitple query
 // $sqlQuery = "SELECT * FROM Customers WHERE Country IN (SELECT Country FROM Suppliers);";
@@ -55,7 +57,6 @@ foreach ($testSQL as $sqlQuery) {
         $query = $builder->showQuery();
         $type = $builder->showQueryType();
         $usedTable = $builder->showTables();
-        $usedColumn = $builder->showColumns();
         // print sqlQuery
         echo '<h2>Query</h2>';
         echo '<pre>' . $query . '</pre>';
@@ -71,14 +72,20 @@ foreach ($testSQL as $sqlQuery) {
         echo '</ul>';
         // print used columns
         echo '<h2>Used Columns</h2>';
-        if ($usedColumn === true) { echo '<pre>All columns selected</pre>'; }
-        else {
+        echo '<ul>';
+        foreach ($usedTable as $tab) {
+            echo '<li>' . $tab . '</li>';
             echo '<ul>'; 
-            foreach ($usedColumn as $col) {
-                echo '<li>' . $col . '</li>';
+            $usedColumn = $builder->showColumns($tab);
+            if ($usedColumn === true) { echo '<li>All columns selected</li>'; }
+            else {
+                foreach ($usedColumn as $col) {
+                    echo '<li>' . $col . '</li>';
+                }
             }
             echo '</ul>';
         }
+        echo '</ul>';
         // print debug messages
         if ($showParserStruct === "true") {
             // parser structure

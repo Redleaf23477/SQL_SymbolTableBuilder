@@ -8,18 +8,32 @@ require $MYPATH."/vendor/autoload.php";
 
 ////////////////////////////////////////////
 
+function insert_key_if_not_exsist(&$arr, $key) {
+    // insert an key into assosiative array if key not exsist
+    if (!array_key_exists($key, $arr)) {
+        $arr[$key] = [];
+    }
+}
+function insert_val_if_not_exsist(&$arr, $val) {
+    // insert value into array if not exsist
+    if (!in_array($val, $arr, true)) {
+        array_push($arr, $val);
+    }
+}
+function get_first_key_of_array($arr) {
+    reset($arr);
+    return key($arr);
+}
+
+/////////////////////////////////////////////
+
 class BaseParser{
     // data from phpmyadmin parser
     protected $statements;
-    // stored parse results
-    protected $selectedTables;
-    protected $selectedColumns;
     
     function __construct($parserStatements) {
 //        echo 'BaseParser constructor called'.'<br>';
         $this->statements = $parserStatements;
-        $this->selectedTables = [];
-        $this->selectedColumns = [];
     }
     
     // self defined tools
@@ -53,40 +67,38 @@ class BaseParser{
 
         return false;
     }
-    protected function insert(&$arr, $val) {
-        // insert into array if not exsist
-        if (!in_array($val, $arr, true)) {
-            array_push($arr, $val);
-        }
-    }
-    // public apis
-    function showTables() { return $this->selectedTables; }
-    function showColumns() { return $this->selectedColumns; }
 }
 
 class SelectParser extends BaseParser {
     private $hasStar;
+    private $selected;
     
     function __construct($parserStatements) {
         parent::__construct($parserStatements);
 //        echo 'SelectParser constructor called'.'<br>';
         $this->hasStar = false;
+        $this->selected = [];
         $this->run();
     }
     
     // get data from each part
     private function selectTable() {
-        $this->insert($this->selectedTables, $this->statements->from[0]->table);
+        foreach ($this->statements->from as $from) {
+            $tableName = $from->table;
+            insert_key_if_not_exsist($this->selected, $tableName);
+             
+        }
     }
     private function selectColumn() {
         if (is_null($this->statements->expr)) { return; }
+        $firstKey = get_first_key_of_array($this->selected);
         foreach ($this->statements->expr as $expr) {
             if ($expr->column !== NULL) {
-                $this->insert($this->selectedColumns, $expr->column);
+                insert_val_if_not_exsist($this->selected[$firstKey], $expr->column);
             } elseif ($expr->function !== NULL) {
-                $arr = $this->functionCutter($expr->expr);
-                foreach ($arr as $x) {
-                    $this->insert($this->selectedColumns, $x);
+                $arrayOfColumns = $this->functionCutter($expr->expr);
+                foreach ($arrayOfColumns as $col) {
+                    insert_val_if_not_exsist($this->selected[$firstKey], $col);
                 }
             } elseif ($expr->expr === '*') {
                 $this->hasStar = true;
@@ -97,18 +109,20 @@ class SelectParser extends BaseParser {
     }
     private function whereColumn() {
         if (is_null($this->statements->where)) { return; }
-        foreach ($this->statements->where as $x) {
-            foreach ($x->identifiers as $y) {
-                if ($this->notString($y, $x->expr)) {
-                    $this->insert($this->selectedColumns, $y);
+        $firstKey = get_first_key_of_array($this->selected);
+        foreach ($this->statements->where as $where) {
+            foreach ($where->identifiers as $col) {
+                if ($this->notString($col, $where->expr)) {
+                    insert_val_if_not_exsist($this->selected[$firstKey], $col);
                 }
             }
         }
     }
     private function groupColumn() {
         if (is_null($this->statements->group)) { return; }
-        foreach ($this->statements->group as $x) {
-            $this->insert($this->selectedColumns, $x);
+        $firstKey = get_first_key_of_array($this->selected);
+        foreach ($this->statements->group as $col) {
+            insert_val_if_not_exsist($this->selected[$firstKey], $col);
         }
     }
     // run all
@@ -118,9 +132,13 @@ class SelectParser extends BaseParser {
         $this->whereColumn();
         $this->groupColumn();
         if ($this->hasStar === true) {
-            $this->selectedColumns = true;
+            $firstKey = get_first_key_of_array($this->selected);
+            $this->selected[$firstKey] = true;
         }
     }
+    // public apis
+    function showTables() { return array_keys($this->selected); }
+    function showColumns() { return $this->selected; }
 }
 
 class SymbolTableBuilder{
@@ -166,7 +184,7 @@ class SymbolTableBuilder{
     // public apis
     function showQueryType() { return $this->queryType; }
     function showTables() { return $this->selectedTables; }
-    function showColumns() { return $this->selectedColumns; }
+    function showColumns($tableName) { return $this->selectedColumns[$tableName]; }
 }
 
 /*
