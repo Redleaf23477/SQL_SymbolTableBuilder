@@ -36,10 +36,12 @@ function get_first_key_of_array($arr) {
 class BaseParser{
     // data from phpmyadmin parser
     protected $statements;
+    protected $queried;
     
     function __construct($parserStatements) {
 //        echo 'BaseParser constructor called'.'<br>';
         $this->statements = $parserStatements;
+        $this->queried = [];
     }
     
     // self defined tools
@@ -73,6 +75,78 @@ class BaseParser{
 
         return false;
     }
+
+    // parser functions used by different query types
+    protected function whereColumn() {
+        if (is_null($this->statements->where)) { return; }
+        $firstKey = get_first_key_of_array($this->queried);
+        foreach ($this->statements->where as $where) {
+            foreach ($where->identifiers as $col) {
+                if ($this->notString($col, $where->expr)) {
+                    insert_val_if_not_exsist($this->queried[$firstKey], $col);
+                }
+            }
+        }
+    }
+
+    // public apis
+    function showTables() { return array_keys($this->queried); }
+    function showColumns() { return $this->queried; }
+}
+
+/////////////////////////////////////////////
+// Parser: Delete
+/////////////////////////////////////////////
+
+class DeleteParser extends BaseParser {
+
+    function __construct($parserStatements) {
+        parent::__construct($parserStatements);
+        $this->run();
+    }
+
+    private function fromTable() {
+        $tableName = $this->statements->from[0]->table;
+        insert_key_if_not_exsist($this->queried, $tableName);
+    }
+
+    private function run() {
+        $this->fromTable();
+        $this->whereColumn();
+    }
+}
+
+/////////////////////////////////////////////
+// Parser: Update
+/////////////////////////////////////////////
+
+class UpdateParser extends BaseParser {
+
+    function __construct($parserStatements) {
+        parent::__construct($parserStatements);
+        $this->run();
+    }
+
+    private function updateTable() {
+        $tableName = $this->statements->tables[0]->table;
+        insert_key_if_not_exsist($this->queried, $tableName);
+    }
+
+    private function setTableColumn() {
+        $tableName = $this->statements->tables[0]->table;
+        $setArr = $this->statements->set;
+        foreach ($setArr as $set) {
+            $colName = $set->column;
+            insert_val_if_not_exsist($this->queried[$tableName], $colName);
+        }
+    }
+
+    private function run() {
+        $this->updateTable();
+        $this->setTableColumn();
+        $this->whereColumn();
+    }
+
 }
 
 /////////////////////////////////////////////
@@ -80,24 +154,22 @@ class BaseParser{
 /////////////////////////////////////////////
 
 class InsertParser extends BaseParser {
-    private $selected;
 
     function __construct($parserStatements) {
         parent::__construct($parserStatements);
-        $this->inserted= [];
         $this->run();
     }
 
     private function intoTable() {
         $tableName = $this->statements->into->dest->table;
-        insert_key_if_not_exsist($this->inserted, $tableName);
+        insert_key_if_not_exsist($this->queried, $tableName);
     }
 
     private function intoColumn() {
         $tableName = $this->statements->into->dest->table;
         $columns = $this->statements->into->columns;
         foreach ($columns as $colName) {
-            insert_val_if_not_exsist($this->inserted[$tableName], $colName);
+            insert_val_if_not_exsist($this->queried[$tableName], $colName);
         }
     }
 
@@ -106,26 +178,21 @@ class InsertParser extends BaseParser {
         $this->intoTable();
         $this->intoColumn();
     }
-    // public apis
-    function showTables() { return array_keys($this->inserted); }
-    function showColumns() { return $this->inserted; }
 }
 
 /////////////////////////////////////////////
 // Parser: Select
 /////////////////////////////////////////////
 
-// selected[ table ] = { columns }
+// queried[ table ] = { columns }
 
 class SelectParser extends BaseParser {
     private $hasStar;
-    private $selected;
     
     function __construct($parserStatements) {
         parent::__construct($parserStatements);
 //        echo 'SelectParser constructor called'.'<br>';
         $this->hasStar = false;
-        $this->selected = [];
         $this->run();
     }
     
@@ -133,7 +200,7 @@ class SelectParser extends BaseParser {
     private function selectTable() {
         foreach ($this->statements->from as $from) {
             $tableName = $from->table;
-            insert_key_if_not_exsist($this->selected, $tableName);
+            insert_key_if_not_exsist($this->queried, $tableName);
              
         }
     }
@@ -142,7 +209,7 @@ class SelectParser extends BaseParser {
     	foreach ($this->statements->join as $join) {
                 // join -> expr -> table
     		$tableName = $join->expr->table;
-    		insert_key_if_not_exsist($this->selected, $tableName);
+    		insert_key_if_not_exsist($this->queried, $tableName);
 
                 // join -> on
                 $on = $join->on;
@@ -158,23 +225,23 @@ class SelectParser extends BaseParser {
                     foreach ($pairArr as $pair) {
                         $tableName = strtok($pair, ".");
                         $colName = strtok(".");
-                        insert_key_if_not_exsist($this->selected, $tableName);
-                        insert_val_if_not_exsist($this->selected[$tableName], $colName);
+                        insert_key_if_not_exsist($this->queried, $tableName);
+                        insert_val_if_not_exsist($this->queried[$tableName], $colName);
                     }
                 }
     	}
     }
     private function selectColumn() {
         if (is_null($this->statements->expr)) { return; }
-        $firstKey = get_first_key_of_array($this->selected);
+        $firstKey = get_first_key_of_array($this->queried);
         foreach ($this->statements->expr as $expr) {
         	$table = ($expr->table !== NULL)? $expr->table : $firstKey;
             if ($expr->column !== NULL) {
-                insert_val_if_not_exsist($this->selected[$table], $expr->column);
+                insert_val_if_not_exsist($this->queried[$table], $expr->column);
             } elseif ($expr->function !== NULL) {
                 $arrayOfColumns = $this->functionCutter($expr->expr);
                 foreach ($arrayOfColumns as $col) {
-                    insert_val_if_not_exsist($this->selected[$table], $col);
+                    insert_val_if_not_exsist($this->queried[$table], $col);
                 }
             } elseif ($expr->expr === '*') {
                 $this->hasStar = true;
@@ -183,22 +250,12 @@ class SelectParser extends BaseParser {
             }
         }
     }
-    private function whereColumn() {
-        if (is_null($this->statements->where)) { return; }
-        $firstKey = get_first_key_of_array($this->selected);
-        foreach ($this->statements->where as $where) {
-            foreach ($where->identifiers as $col) {
-                if ($this->notString($col, $where->expr)) {
-                    insert_val_if_not_exsist($this->selected[$firstKey], $col);
-                }
-            }
-        }
-    }
+    // whereColumn() : moved to BaseParser
     private function groupColumn() {
         if (is_null($this->statements->group)) { return; }
-        $firstKey = get_first_key_of_array($this->selected);
+        $firstKey = get_first_key_of_array($this->queried);
         foreach ($this->statements->group as $col) {
-            insert_val_if_not_exsist($this->selected[$firstKey], $col);
+            insert_val_if_not_exsist($this->queried[$firstKey], $col);
         }
     }
     // run all
@@ -209,13 +266,10 @@ class SelectParser extends BaseParser {
         $this->whereColumn();
         $this->groupColumn();
         if ($this->hasStar === true) {
-            $firstKey = get_first_key_of_array($this->selected);
-            $this->selected[$firstKey] = true;
+            $firstKey = get_first_key_of_array($this->queried);
+            $this->queried[$firstKey] = true;
         }
     }
-    // public apis
-    function showTables() { return array_keys($this->selected); }
-    function showColumns() { return $this->selected; }
 }
 
 /////////////////////////////////////////////
@@ -227,8 +281,8 @@ class SymbolTableBuilder{
     private $sqlQuery;
     // stored parse results
     private $queryType;
-    private $selectedTables;
-    private $selectedColumns;
+    private $queriedTables;
+    private $queriedColumns;
     // by phpmyadmin sql parser
     private $parserTokenList;
     private $parserStatements;
@@ -246,12 +300,20 @@ class SymbolTableBuilder{
         
         if ($this->queryType === 'SELECT') {
             $parser = new SelectParser($this->parserStatements);
-            $this->selectedTables = $parser->showTables();
-            $this->selectedColumns = $parser->showColumns();
+            $this->queriedTables = $parser->showTables();
+            $this->queriedColumns = $parser->showColumns();
         } else if ($this->queryType == 'INSERT') {
             $parser = new InsertParser($this->parserStatements);
-            $this->selectedTables = $parser->showTables();
-            $this->selectedColumns = $parser->showColumns();
+            $this->queriedTables = $parser->showTables();
+            $this->queriedColumns = $parser->showColumns();
+        } else if ($this->queryType == 'UPDATE') {
+            $parser = new UpdateParser($this->parserStatements);
+            $this->queriedTables = $parser->showTables();
+            $this->queriedColumns = $parser->showColumns();
+        } else if ($this->queryType == 'DELETE') {
+            $parser = new DeleteParser($this->parserStatements);
+            $this->queriedTables = $parser->showTables();
+            $this->queriedColumns = $parser->showColumns();
         } else {
             // throw new Exception($this->queryType . ' not implemented yet or invalid');
             echo ($this->queryType . ' not implemented yet or invalid');
@@ -269,7 +331,7 @@ class SymbolTableBuilder{
     function showStatements() { return $this->parserStatements; }
     // public apis
     function showQueryType() { return $this->queryType; }
-    function showTables() { return $this->selectedTables; }
-    function showColumns($tableName) { return $this->selectedColumns[$tableName]; }
+    function showTables() { return $this->queriedTables; }
+    function showColumns($tableName) { return $this->queriedColumns[$tableName]; }
 }
 

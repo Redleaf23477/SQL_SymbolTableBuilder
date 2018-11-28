@@ -4,7 +4,6 @@ require("phpParser.php");
 
 $testSQL = array(
 
-
 // simple select
  "Select A, B, C from myTable where D = 7122 and E = 9487 and F=G;",
 // select distinct
@@ -21,18 +20,15 @@ $testSQL = array(
 "SELECT Orders.OrderID, Customers.CustomerName, Orders.OrderDate FROM Orders INNER JOIN Customers ON Orders.CustomerID=Customers.CustomerID;",
 // JOIN
 "SELECT Orders.OrderID, Customers.CustomerName FROM Orders INNER JOIN Customers ON Orders.CustomerID = Customers.CustomerID and Orders.CustomerID = Customers.CustomerName;",
+// Simple Insert
+"INSERT INTO Customers (CustomerName, City, Country) VALUES ('Cardinal', 'Stavanger', 'Norway');",
+// [Not Yet] Simple Update
+"UPDATE Customers SET ContactName = 'Alfred Schmidt', City= 'Frankfurt' WHERE CustomerID = 1",
+// [Not Yet] simple delete
+"DELETE FROM Customers WHERE CustomerName='Alfreds Futterkiste'"
 
 // [FAILED] Mulitple query
 // $sqlQuery = "SELECT * FROM Customers WHERE Country IN (SELECT Country FROM Suppliers);";
-
-// Simple Insert
-"INSERT INTO Customers (CustomerName, City, Country) VALUES ('Cardinal', 'Stavanger', 'Norway');",
-
-// [Not Yet] Simple Update
-"UPDATE Customers SET ContactName = 'Alfred Schmidt', City= 'Frankfurt' WHERE CustomerID = 1",
-
-// [Not Yet] simple delete
-"DELETE FROM Customers WHERE CustomerName='Alfreds Futterkiste'"
 
 );
 $showParserStruct = $_GET['debug'];
