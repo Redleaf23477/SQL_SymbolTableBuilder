@@ -7,6 +7,10 @@ $MYPATH = "/var/www/html";
 require $MYPATH."/vendor/autoload.php";
 
 ////////////////////////////////////////////
+// global functions with arrays
+////////////////////////////////////////////
+
+// arr[key] = {val}
 
 function insert_key_if_not_exsist(&$arr, $key) {
     // insert an key into assosiative array if key not exsist
@@ -25,6 +29,8 @@ function get_first_key_of_array($arr) {
     return key($arr);
 }
 
+/////////////////////////////////////////////
+// base class of parser
 /////////////////////////////////////////////
 
 class BaseParser{
@@ -69,6 +75,48 @@ class BaseParser{
     }
 }
 
+/////////////////////////////////////////////
+// Parser: Insert
+/////////////////////////////////////////////
+
+class InsertParser extends BaseParser {
+    private $selected;
+
+    function __construct($parserStatements) {
+        parent::__construct($parserStatements);
+        $this->inserted= [];
+        $this->run();
+    }
+
+    private function intoTable() {
+        $tableName = $this->statements->into->dest->table;
+        insert_key_if_not_exsist($this->inserted, $tableName);
+    }
+
+    private function intoColumn() {
+        $tableName = $this->statements->into->dest->table;
+        $columns = $this->statements->into->columns;
+        foreach ($columns as $colName) {
+            insert_val_if_not_exsist($this->inserted[$tableName], $colName);
+        }
+    }
+
+    // run all
+    private function run() {
+        $this->intoTable();
+        $this->intoColumn();
+    }
+    // public apis
+    function showTables() { return array_keys($this->inserted); }
+    function showColumns() { return $this->inserted; }
+}
+
+/////////////////////////////////////////////
+// Parser: Select
+/////////////////////////////////////////////
+
+// selected[ table ] = { columns }
+
 class SelectParser extends BaseParser {
     private $hasStar;
     private $selected;
@@ -89,16 +137,44 @@ class SelectParser extends BaseParser {
              
         }
     }
+    private function joinTable() {
+    	if(is_null($this->statements->join)) { return; }
+    	foreach ($this->statements->join as $join) {
+                // join -> expr -> table
+    		$tableName = $join->expr->table;
+    		insert_key_if_not_exsist($this->selected, $tableName);
+
+                // join -> on
+                $on = $join->on;
+                foreach ($on as $expr) {
+                    if ($expr->isOperator == true) { continue; }
+                    //A.a=B.b
+                    $pairArr = [];
+                    $tok = strtok($expr, " =");
+                    while ($tok !== false) {
+                        $pairArr[] = $tok;
+                        $tok = strtok(" =");
+                    }
+                    foreach ($pairArr as $pair) {
+                        $tableName = strtok($pair, ".");
+                        $colName = strtok(".");
+                        insert_key_if_not_exsist($this->selected, $tableName);
+                        insert_val_if_not_exsist($this->selected[$tableName], $colName);
+                    }
+                }
+    	}
+    }
     private function selectColumn() {
         if (is_null($this->statements->expr)) { return; }
         $firstKey = get_first_key_of_array($this->selected);
         foreach ($this->statements->expr as $expr) {
+        	$table = ($expr->table !== NULL)? $expr->table : $firstKey;
             if ($expr->column !== NULL) {
-                insert_val_if_not_exsist($this->selected[$firstKey], $expr->column);
+                insert_val_if_not_exsist($this->selected[$table], $expr->column);
             } elseif ($expr->function !== NULL) {
                 $arrayOfColumns = $this->functionCutter($expr->expr);
                 foreach ($arrayOfColumns as $col) {
-                    insert_val_if_not_exsist($this->selected[$firstKey], $col);
+                    insert_val_if_not_exsist($this->selected[$table], $col);
                 }
             } elseif ($expr->expr === '*') {
                 $this->hasStar = true;
@@ -127,6 +203,7 @@ class SelectParser extends BaseParser {
     }
     // run all
     private function run() {
+    	$this->joinTable();
         $this->selectTable();
         $this->selectColumn();
         $this->whereColumn();
@@ -140,6 +217,10 @@ class SelectParser extends BaseParser {
     function showTables() { return array_keys($this->selected); }
     function showColumns() { return $this->selected; }
 }
+
+/////////////////////////////////////////////
+// main class
+/////////////////////////////////////////////
 
 class SymbolTableBuilder{
     // input sql query
@@ -167,8 +248,13 @@ class SymbolTableBuilder{
             $parser = new SelectParser($this->parserStatements);
             $this->selectedTables = $parser->showTables();
             $this->selectedColumns = $parser->showColumns();
+        } else if ($this->queryType == 'INSERT') {
+            $parser = new InsertParser($this->parserStatements);
+            $this->selectedTables = $parser->showTables();
+            $this->selectedColumns = $parser->showColumns();
         } else {
-            throw new Exception($this->queryType . ' not implemented yet or invalid');
+            // throw new Exception($this->queryType . ' not implemented yet or invalid');
+            echo ($this->queryType . ' not implemented yet or invalid');
         }
         
     }    
@@ -187,50 +273,3 @@ class SymbolTableBuilder{
     function showColumns($tableName) { return $this->selectedColumns[$tableName]; }
 }
 
-/*
-<head>
-    
-<title>Test Symbol Array Builder</title>
-
-</head>
-<body>
-
-<pre><?php
-    $sqlQuery = 'SELECT DISTINCT Country FROM Customers;';
-    $builder = new SymbolTableBuilder($sqlQuery);
-?></pre>
-
-<h1>Symbol Array Builder</h1>
-
-<div>
-    <h2>Query</h2>
-    <pre><?php var_dump($builder->showQuery()); ?></pre>
-</div>
-
-<div>
-    <h2>Query Type</h2>
-    <pre><?php var_dump($builder->showQueryType()); ?></pre>
-</div>
-
-<div>
-    <h2>Table</h2>
-    <pre><?php var_dump($builder->showTables()); ?></pre>
-</div>
-
-<div>
-    <h2>Columns</h2>
-    </pre><?php var_dump($builder->showColumns()); ?></pre>
-</div>
-
-<div>
-    <h2>Builder</h2>
-    <pre><?php var_dump($builder); ?></pre>
-    <h2>Parser: Token List</h2>
-    <pre><?php var_dump($builder->showTokenList()); ?></pre>
-    <h2>Parser: Statements</h2>
-    <pre><?php var_dump($builder->showStatements()); ?></pre>
-</div>
-
-</body>
-*/
-?>

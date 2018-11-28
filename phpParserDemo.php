@@ -4,10 +4,9 @@ require("phpParser.php");
 
 $testSQL = array(
 
-// simple select
- "Select A, B, C from myTable where D = 7122 and E = 9487 and F=G;"
 
-/*
+// simple select
+ "Select A, B, C from myTable where D = 7122 and E = 9487 and F=G;",
 // select distinct
  "SELECT DISTINCT Country FROM Customers;",
 // select with star
@@ -18,26 +17,23 @@ $testSQL = array(
  "SELECT * FROM Customers WHERE Country='Mexico' or City is 'City';",
 // dealing with function
  "Select Avg(C) from mytable;",
-
-// [Not Yet] JOIN
+// JOIN
 "SELECT Orders.OrderID, Customers.CustomerName, Orders.OrderDate FROM Orders INNER JOIN Customers ON Orders.CustomerID=Customers.CustomerID;",
-
-// [Not Yet] JOIN
-"SELECT Orders.OrderID, Customers.CustomerName FROM Orders INNER JOIN Customers ON Orders.CustomerID = Customers.CustomerID and Orders.CustomerID = Customers.CustomerName;"
+// JOIN
+"SELECT Orders.OrderID, Customers.CustomerName FROM Orders INNER JOIN Customers ON Orders.CustomerID = Customers.CustomerID and Orders.CustomerID = Customers.CustomerName;",
 
 // [FAILED] Mulitple query
 // $sqlQuery = "SELECT * FROM Customers WHERE Country IN (SELECT Country FROM Suppliers);";
 
-// [Not Yet] Simple Insert
- "INSERT INTO Customers (CustomerName, City, Country) VALUES ('Cardinal', 'Stavanger', 'Norway');"
+// Simple Insert
+"INSERT INTO Customers (CustomerName, City, Country) VALUES ('Cardinal', 'Stavanger', 'Norway');",
 
 // [Not Yet] Simple Update
-// $sqlQuery = "UPDATE Customers SET ContactName = 'Alfred Schmidt', City= 'Frankfurt' WHERE CustomerID = 1";
+"UPDATE Customers SET ContactName = 'Alfred Schmidt', City= 'Frankfurt' WHERE CustomerID = 1",
 
 // [Not Yet] simple delete
-// $sqlQuery = "DELETE FROM Customers WHERE CustomerName='Alfreds Futterkiste'";
+"DELETE FROM Customers WHERE CustomerName='Alfreds Futterkiste'"
 
-*/
 );
 $showParserStruct = $_GET['debug'];
 ?>
@@ -87,26 +83,29 @@ foreach ($testSQL as $sqlQuery) {
         }
         echo '</ul>';
         // print debug messages
+    } catch (Exception $err) {
+        // print sqlQuery
+        echo '<h2>Query</h2>';
+        echo '<pre>' . $sqlQuery . '</pre>';
+        echo '<pre>Exception Caught: ' . $err->getMessage() . '</pre>';
+    } finally {
         if ($showParserStruct === "true") {
             // parser structure
             echo '<h2>SymbolTableBuilder</h2>';
             echo '<pre>';
             var_dump($builder);
             echo '</pre>';
-            // token list
-            echo '<h2>Token List by phpmyadmin</h2>';
-            echo '<pre>';
-            var_dump($builder->showTokenList());
-            echo '</pre>';
-            // statements
-            echo '<h2>Statements by phpmyadimin</h2>';
-            echo '<pre>';
-            var_dump($builder->showStatements());
-            echo '</pre>';
+//            // token list
+//            echo '<h2>Token List by phpmyadmin</h2>';
+//            echo '<pre>';
+//            var_dump($builder->showTokenList());
+//            echo '</pre>';
+//            // statements
+//            echo '<h2>Statements by phpmyadimin</h2>';
+//            echo '<pre>';
+//            var_dump($builder->showStatements());
+//            echo '</pre>';
         }
-    } catch (Exception $err) {
-        echo '<pre>Exception Caught: ' . $err->getMessage() . '</pre>';
-    } finally {
         echo '<br><hr><br>';
     }
 }
